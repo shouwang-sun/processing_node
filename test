@@ -1,0 +1,21 @@
+import codecs
+import json
+import random
+
+import nptdms
+
+tdms_file = nptdms.TdmsFile('02-01#20180529052000.TDMS')
+df = tdms_file.as_dataframe()
+df.rename(columns=lambda name: name.split('/')[-1].strip('\''), inplace=True)
+df.drop([u'CH10', u'CH11'], axis='columns', inplace=True)
+df.fillna(method='pad', axis='index', inplace=True)
+
+for sensor in df.columns:
+    if sensor[10] == 'S':
+        df[sensor] = df[sensor] - df[sensor].min()
+    elif sensor[10] == 'D':
+        df[sensor] = df[sensor] - df[sensor].loc[0].round() + random.randint(0, 9)
+
+data = df.to_dict(orient='list')
+with codecs.open('data.json', 'w', encoding='utf-8') as json_output_file:
+    json.dump(data, json_output_file, encoding='utf-8')

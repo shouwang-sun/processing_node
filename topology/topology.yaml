@@ -1,0 +1,293 @@
+name: ${topology.name}
+
+config:
+  pystorm.log.backup_count: 10
+  pystorm.log.file: pystorm_{topology_name}_{component_name}_{task_id}_{pid}.log
+  pystorm.log.level: info
+  pystorm.log.max_bytes: 100000
+  pystorm.log.path: /logs
+  storm.workers.list: []
+  topology.python.path: /data/virtualenvs//bsparse/bin/python
+  topology.workers: 4
+
+components:
+  - id: bshmScheme
+    className: bshm.spouts.scheme.BshmScheme
+
+  - id: stringMultiScheme
+    className: org.apache.storm.spout.SchemeAsMultiScheme
+    constructorArgs:
+      - ref: bshmScheme
+
+  - id: zkHosts
+    className: org.apache.storm.kafka.ZkHosts
+    constructorArgs:
+      - confluent_zookeeper_1:2888
+
+  - id: spoutConfig
+    className: org.apache.storm.kafka.SpoutConfig
+    constructorArgs:
+      # brokerHosts
+      - ref: zkHosts
+      # topic
+      - ${kafka.topic}
+      # zkRoot
+      - /kafkaSpout
+      # id
+      - myId
+    properties:
+      - name: ignoreZkOffsets
+        value: true
+      - name: scheme
+        ref: stringMultiScheme
+
+  - id: mongoMapper
+    className: bshm.bolts.mongodb.common.mapper.SimpleMongoMapper
+    configMethods:
+      - name: withFields
+        args:
+          - - timestamp
+            - time_increment
+            - channel_name
+            - data
+
+# spout definitions
+spouts:
+  - id: bshmSpout
+    className: org.apache.storm.kafka.KafkaSpout
+    constructorArgs:
+      - ref: spoutConfig
+    parallelism: 4
+
+# bolt definitions
+bolts:
+  - id: logInfoBolt
+    className: org.apache.storm.flux.wrappers.bolts.FluxShellBolt
+    configMethods: []
+    constructorArgs:
+    - - streamparse_run
+      - -s json bolts.log_info.LogInfoBolt
+    - - NONE_BUT_FLUX_WANTS_SOMETHING_HERE
+    parallelism: 1
+
+#  - id: mongoBolt
+#    className: org.apache.storm.mongodb.bolt.MongoInsertBolt
+#    constructorArgs:
+#      - ${mongodb.url}
+#      - ${mongodb.collection}
+#      - ref: mongoMapper
+#    parallelism: 4
+
+  - id: detrendBolt
+    className: org.apache.storm.flux.wrappers.bolts.FluxShellBolt
+    constructorArgs:
+    - - streamparse_run
+      - -s json bolts.detrend.DetrendBolt
+    configMethods:
+      - name: addComponentConfig
+        args:
+          - min_tup_num
+          - 4
+      - name: setNamedStream
+        args:
+          - detrend
+          - ${channel.tuple.fields}
+    parallelism: 1
+
+  - id: neutralAxisBolt
+    className: org.apache.storm.flux.wrappers.bolts.FluxShellBolt
+    constructorArgs:
+      - - streamparse_run
+        - -s json bolts.neutral_axis.NeutralAxisBolt
+    configMethods:
+      - name: setNamedStream
+        args:
+          - neutral_axis
+          - [timestamp_min, timestamp_max, neutral_axis]
+      - name: addComponentConfig
+        args:
+          - height
+          - - [FCXF-X-03-S03, 300]
+            - [FCXF-X-03-S02, 700]
+            - [FCXF-X-03-S01, 1100]
+      - name: addComponentConfig
+        args:
+          - threshold
+          - 1
+      - name: addComponentConfig
+        args:
+          - group_freq
+          - 10s
+
+  - id: tdmsParseBolt
+    className: org.apache.storm.flux.wrappers.bolts.FluxShellBolt
+    constructorArgs:
+      - - streamparse_run
+        - -s json bolts.tdms_parse.TDMSParseBolt
+    configMethods:
+      - name: setNamedStream
+        args:
+          - FCXF-X-03-A01
+          - ${channel.tuple.fields}
+      - name: setNamedStream
+        args:
+          - FCXF-X-02-T03
+          - ${channel.tuple.fields}
+      - name: setNamedStream
+        args:
+          - FCXF-X-03-A02
+          - ${channel.tuple.fields}
+      - name: setNamedStream
+        args:
+          - FCXF-X-02-T04
+          - ${channel.tuple.fields}
+      - name: setNamedStream
+        args:
+          - FCXF-X-02-S04
+          - ${channel.tuple.fields}
+      - name: setNamedStream
+        args:
+          - FCXF-X-02-S02
+          - ${channel.tuple.fields}
+      - name: setNamedStream
+        args:
+          - FCXF-X-02-S03
+          - ${channel.tuple.fields}
+      - name: setNamedStream
+        args:
+          - FCXF-X-02-S01
+          - ${channel.tuple.fields}
+      - name: setNamedStream
+        args:
+          - FCXF-X-04-S04
+          - ${channel.tuple.fields}
+      - name: setNamedStream
+        args:
+          - FCXF-X-04-S01
+          - ${channel.tuple.fields}
+      - name: setNamedStream
+        args:
+          - FCXF-X-04-S02
+          - ${channel.tuple.fields}
+      - name: setNamedStream
+        args:
+          - FCXF-X-04-S03
+          - ${channel.tuple.fields}
+      - name: setNamedStream
+        args:
+          - FCXF-X-03-T04
+          - ${channel.tuple.fields}
+      - name: setNamedStream
+        args:
+          - FCXF-X-03-T05
+          - ${channel.tuple.fields}
+      - name: setNamedStream
+        args:
+          - FCXF-X-03-T06
+          - ${channel.tuple.fields}
+      - name: setNamedStream
+        args:
+          - FCXF-X-02-A01
+          - ${channel.tuple.fields}
+      - name: setNamedStream
+        args:
+          - FCXF-X-03-T02
+          - ${channel.tuple.fields}
+      - name: setNamedStream
+        args:
+          - FCXF-X-03-T03
+          - ${channel.tuple.fields}
+      - name: setNamedStream
+        args:
+          - FCXF-X-03-T01
+          - ${channel.tuple.fields}
+      - name: setNamedStream
+        args:
+          - FCXF-X-04-T03
+          - ${channel.tuple.fields}
+      - name: setNamedStream
+        args:
+          - FCXF-X-04-T02
+          - ${channel.tuple.fields}
+      - name: setNamedStream
+        args:
+          - FCXF-X-04-T01
+          - ${channel.tuple.fields}
+      - name: setNamedStream
+        args:
+          - FCXF-X-04-T04
+          - ${channel.tuple.fields}
+      - name: setNamedStream
+        args:
+          - FCXF-X-04-A01
+          - ${channel.tuple.fields}
+      - name: setNamedStream
+        args:
+          - FCXF-X-03-S03
+          - ${channel.tuple.fields}
+      - name: setNamedStream
+        args:
+          - FCXF-X-03-S02
+          - ${channel.tuple.fields}
+      - name: setNamedStream
+        args:
+          - FCXF-X-03-S01
+          - ${channel.tuple.fields}
+      - name: setNamedStream
+        args:
+          - FCXF-X-02-T02
+          - ${channel.tuple.fields}
+      - name: setNamedStream
+        args:
+          - FCXF-X-03-S06
+          - ${channel.tuple.fields}
+      - name: setNamedStream
+        args:
+          - FCXF-X-03-S05
+          - ${channel.tuple.fields}
+      - name: setNamedStream
+        args:
+          - FCXF-X-03-S04
+          - ${channel.tuple.fields}
+      - name: setNamedStream
+        args:
+          - FCXF-X-02-T01
+          - ${channel.tuple.fields}
+      - name: setNamedStream
+        args:
+          - ALL-CHANNELS
+          - ${channel.tuple.fields}
+    parallelism: 8
+
+# stream definitions
+streams:
+  - from: bshmSpout
+    to: tdmsParseBolt
+    grouping:
+      type: LOCAL_OR_SHUFFLE
+
+  - from: tdmsParseBolt
+    to: neutralAxisBolt
+    grouping:
+      type: LOCAL_OR_SHUFFLE
+      streamId: FCXF-X-03-S01
+
+  - from: tdmsParseBolt
+    to: neutralAxisBolt
+    grouping:
+      type: LOCAL_OR_SHUFFLE
+      streamId: FCXF-X-03-S02
+
+  - from: tdmsParseBolt
+    to: neutralAxisBolt
+    grouping:
+      type: LOCAL_OR_SHUFFLE
+      streamId: FCXF-X-03-S03
+
+  - from: neutralAxisBolt
+    to: logInfoBolt
+    grouping:
+      type: LOCAL_OR_SHUFFLE
+      streamId: neutral_axis
+
+# vim:set sw=2 ts=2 sts=2: #
